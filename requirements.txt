@@ -1,0 +1,12 @@
+fastapi==0.103.1
+numpy==2.0.2
+nlopt==2.9.1
+uvicorn==0.23.2
+solidpython2==2.1.1
+trimesh==3.23.5
+pyglet==2.0.9
+# Usa una versión disponible de cadquery-ocp
+cadquery==2.5.2
+casadi==3.6.3
+typish==1.9.3
+python-multipart==0.0.6 
