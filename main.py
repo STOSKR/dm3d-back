@@ -362,8 +362,13 @@ def crear_modelo_estrella(params: ParametrosEstrella, stl_path: str):
         # Captura de pantalla
         screenshot_path = os.path.join(OUTPUT_DIR, "star.png")
         try:
-            show(internal_hole, width=800, height=800, screenshot=screenshot_path, zoom=2, row=0, elevation=-30, interact=False)
-            print(f"  Captura guardada en: {screenshot_path}")
+            # Intentar usar un método alternativo si show() falla
+            try:
+                show(internal_hole, width=800, height=800, screenshot=screenshot_path, zoom=2, row=0, elevation=-30, interact=False)
+                print(f"  Captura guardada en: {screenshot_path}")
+            except Exception as e1:
+                print(f"  Error con método show(): {str(e1)}")
+                guardar_captura_modelo(internal_hole, screenshot_path)
         except Exception as e:
             print(f"  ERROR al generar captura: {str(e)}")
             # No elevamos esta excepción ya que la captura no es crítica
@@ -466,12 +471,17 @@ if __name__ == "__main__":
     stl_path = os.path.join(OUTPUT_DIR, f"umbrella_{datetime.now().strftime('%d_%H_%M_%S')}.stl")
     
     # Iniciar el servidor
-    print("\nIniciando servidor en http://localhost:8000")
+    puerto = 8080  # Cambiado de 8000 a 8080
+    print(f"\nIniciando servidor en http://localhost:{puerto}")
     print("Puede probar la API usando Postman con los siguientes endpoints:")
-    print("POST http://localhost:8000/generar-paraguas/")
-    print("POST http://localhost:8000/generar-circulo/")
-    print("POST http://localhost:8000/generar-triangulo/")
-    print("POST http://localhost:8000/generar-estrella/")
-    print("GET http://localhost:8000/docs para ver la documentación completa")
+    print(f"POST http://localhost:{puerto}/generar-paraguas/")
+    print(f"POST http://localhost:{puerto}/generar-circulo/")
+    print(f"POST http://localhost:{puerto}/generar-triangulo/")
+    print(f"POST http://localhost:{puerto}/generar-estrella/")
+    print(f"GET http://localhost:{puerto}/docs para ver la documentación completa")
     
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=puerto)
+    except Exception as e:
+        print(f"Error al iniciar el servidor: {str(e)}")
+        traceback.print_exc() 
