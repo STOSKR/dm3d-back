@@ -12,8 +12,8 @@ from typing import Optional
 from datetime import datetime
 
 app = FastAPI(
-    title="API de Modelo 3D de Paraguas",
-    description="API para generar modelos 3D de paraguas basados en parámetros",
+    title="API de Modelos 3D de Figuras",
+    description="API para generar modelos 3D de figuras (paraguas, círculos, triángulos) basados en parámetros",
     version="1.0.0"
 )
 
@@ -38,6 +38,15 @@ class ParametrosParaguas(BaseModel):
     n_arcs: int  # Número de arcos
     h_tail: float  # Altura de la cola
     h_top: float  # Altura superior
+    deep: float  # Profundidad del molde
+
+class ParametrosCirculo(BaseModel):
+    r_circle: float  # Radio del círculo
+    deep: float  # Profundidad del molde
+
+class ParametrosTriangulo(BaseModel):
+    base: float  # Base del triángulo
+    height: float  # Altura del triángulo
     deep: float  # Profundidad del molde
 
 def solicitar_parametros():
@@ -81,6 +90,18 @@ def eliminar_archivo(ruta: str, segundos: int):
     time.sleep(segundos)
     if os.path.exists(ruta):
         os.remove(ruta)
+
+def guardar_captura_modelo(modelo, ruta_archivo):
+    """Guarda una captura del modelo 3D usando VTK directamente"""
+    try:
+        from cadquery.vis import cad_display
+        display = cad_display.CadDisplay(modelo)
+        display._renderer.SaveImage(ruta_archivo)
+        print(f"Captura guardada en: {ruta_archivo}")
+        return True
+    except Exception as e:
+        print(f"Error al guardar captura: {str(e)}")
+        return False
 
 def crear_modelo_paraguas(params: ParametrosParaguas, stl_path: str):
     try:
@@ -178,7 +199,14 @@ def crear_modelo_paraguas(params: ParametrosParaguas, stl_path: str):
         cq.exporters.export(umbrella, stl_path)
         print("Exportación completada con éxito")
 
-        show(umbrella, width=800, height=800, screenshot="umbrella.png", zoom=2, row=-20, elevation=-30, interact=False )
+        # Método 1: Usar ruta absoluta para la captura de pantalla con show()
+        screenshot_path = os.path.join(OUTPUT_DIR, "umbrella.png")
+        show(umbrella, width=800, height=800, screenshot=screenshot_path, zoom=2, row=-20, elevation=-30, interact=False)
+        print(f"Método 1: Intento guardar captura en: {screenshot_path}")
+        
+        # Método 2: Usar función alternativa de captura
+        screenshot_path2 = os.path.join(OUTPUT_DIR, "umbrella_alt.png")
+        guardar_captura_modelo(umbrella, screenshot_path2)
         
     except Exception as e:
         import traceback
@@ -187,11 +215,129 @@ def crear_modelo_paraguas(params: ParametrosParaguas, stl_path: str):
         traceback.print_exc()
         raise e
 
+def crear_modelo_circulo(params: ParametrosCirculo, stl_path: str):
+    try:
+        print("Iniciando creación del círculo con los siguientes parámetros:")
+        print(f"r_circle: {params.r_circle}, deep: {params.deep}")
+        
+        # Extraer parámetros
+        r_circle = params.r_circle
+        deep = params.deep
+        
+        # Crear círculo
+        part1 = cq.Workplane("XY").cylinder(deep, r_circle)
+        
+        # Generar el molde
+        internal_hole = part1.faces(">Z").shell(-deep*0.1)
+        
+        print(f"Exportando modelo a {stl_path}...")
+        # Exporta el modelo a STL
+        cq.exporters.export(internal_hole, stl_path)
+        print("Exportación completada con éxito")
+        
+        # Captura de pantalla
+        screenshot_path = os.path.join(OUTPUT_DIR, "circle.png")
+        show(internal_hole, width=800, height=800, screenshot=screenshot_path, zoom=2, row=0, elevation=-30, interact=False)
+        
+    except Exception as e:
+        import traceback
+        print(f"Error detallado en crear_modelo_circulo: {str(e)}")
+        print("Rastreo completo del error:")
+        traceback.print_exc()
+        raise e
+
+def crear_modelo_triangulo(params: ParametrosTriangulo, stl_path: str):
+    try:
+        print("Iniciando creación del triángulo con los siguientes parámetros:")
+        print(f"base: {params.base}, height: {params.height}, deep: {params.deep}")
+        
+        # Extraer parámetros
+        base = params.base
+        height = params.height
+        deep = params.deep
+        
+        # Crear triángulo
+        # Definir los puntos para el triángulo equilátero
+        points = [
+            (-base/2, 0),
+            (base/2, 0),
+            (0, height)
+        ]
+        
+        # Crear perfil del triángulo y extruirlo
+        part1 = cq.Workplane("XY").polyline(points).close().extrude(deep)
+        
+        # Generar el molde
+        internal_hole = part1.faces(">Z").shell(-deep*0.1)
+        
+        print(f"Exportando modelo a {stl_path}...")
+        # Exporta el modelo a STL
+        cq.exporters.export(internal_hole, stl_path)
+        print("Exportación completada con éxito")
+        
+        # Captura de pantalla
+        screenshot_path = os.path.join(OUTPUT_DIR, "triangle.png")
+        show(internal_hole, width=800, height=800, screenshot=screenshot_path, zoom=2, row=0, elevation=-30, interact=False)
+        
+    except Exception as e:
+        import traceback
+        print(f"Error detallado en crear_modelo_triangulo: {str(e)}")
+        print("Rastreo completo del error:")
+        traceback.print_exc()
+        raise e
+
+@app.post("/generar-circulo/", summary="Genera un modelo 3D de círculo")
+async def generar_circulo(parametros: ParametrosCirculo, background_tasks: BackgroundTasks):
+    # Crear un ID único para este modelo
+    stl_path = os.path.join(OUTPUT_DIR, f"circle_{datetime.now().strftime('%d_%H%M%S')}.stl")
+    
+    try:
+        # Crear el modelo 3D usando los parámetros proporcionados
+        crear_modelo_circulo(parametros, stl_path)
+        
+        # Configurar eliminación del archivo después de 1 hora
+        background_tasks.add_task(eliminar_archivo, stl_path, 3600)
+        
+        # Devolver directamente el archivo STL
+        return FileResponse(
+            path=stl_path,
+            filename="circulo.stl",
+            media_type="application/octet-stream"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el modelo: {str(e)}")
+
+@app.post("/generar-triangulo/", summary="Genera un modelo 3D de triángulo")
+async def generar_triangulo(parametros: ParametrosTriangulo, background_tasks: BackgroundTasks):
+    # Crear un ID único para este modelo
+    stl_path = os.path.join(OUTPUT_DIR, f"triangle_{datetime.now().strftime('%d_%H%M%S')}.stl")
+    
+    try:
+        # Crear el modelo 3D usando los parámetros proporcionados
+        crear_modelo_triangulo(parametros, stl_path)
+        
+        # Configurar eliminación del archivo después de 1 hora
+        background_tasks.add_task(eliminar_archivo, stl_path, 3600)
+        
+        # Devolver directamente el archivo STL
+        return FileResponse(
+            path=stl_path,
+            filename="triangulo.stl",
+            media_type="application/octet-stream"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al generar el modelo: {str(e)}")
+
 @app.get("/", summary="Ruta principal")
 async def raiz():
     return {
-        "mensaje": "API de Modelo 3D de Paraguas",
-        "descripción": "Use el endpoint /generar-paraguas/ para crear un nuevo modelo 3D",
+        "mensaje": "API de Modelo 3D de Figuras",
+        "descripción": "Use los endpoints para crear modelos 3D",
+        "endpoints": [
+            "/generar-paraguas/",
+            "/generar-circulo/",
+            "/generar-triangulo/"
+        ],
         "documentación": "/docs"
     }
 
@@ -220,7 +366,8 @@ if __name__ == "__main__":
     print("\nIniciando servidor en http://localhost:8000")
     print("Puede probar la API usando Postman con los siguientes endpoints:")
     print("POST http://localhost:8000/generar-paraguas/")
-    print("GET http://localhost:8000/descargar-modelo/{modelo_id}")
+    print("POST http://localhost:8000/generar-circulo/")
+    print("POST http://localhost:8000/generar-triangulo/")
     print("GET http://localhost:8000/docs para ver la documentación completa")
     
     uvicorn.run(app, host="0.0.0.0", port=8000) 
