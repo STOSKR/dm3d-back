@@ -194,10 +194,8 @@ def crear_modelo_paraguas(params: ParametrosParaguas, stl_path: str):
         internal_hole = umbrella.faces(">Z").shell(-deep*0.1)
         umbrella = internal_hole
 
-        print(f"Exportando modelo a {stl_path}...")
         # Exporta el modelo a STL
         cq.exporters.export(umbrella, stl_path)
-        print("Exportación completada con éxito")
 
         # Método 1: Usar ruta absoluta para la captura de pantalla con show()
         screenshot_path = os.path.join(OUTPUT_DIR, "umbrella.png")
@@ -230,10 +228,8 @@ def crear_modelo_circulo(params: ParametrosCirculo, stl_path: str):
         # Generar el molde
         internal_hole = part1.faces(">Z").shell(-deep*0.1)
         
-        print(f"Exportando modelo a {stl_path}...")
         # Exporta el modelo a STL
         cq.exporters.export(internal_hole, stl_path)
-        print("Exportación completada con éxito")
         
         # Captura de pantalla
         screenshot_path = os.path.join(OUTPUT_DIR, "circle.png")
@@ -270,10 +266,8 @@ def crear_modelo_triangulo(params: ParametrosTriangulo, stl_path: str):
         # Generar el molde
         internal_hole = part1.faces(">Z").shell(-deep*0.1)
         
-        print(f"Exportando modelo a {stl_path}...")
         # Exporta el modelo a STL
         cq.exporters.export(internal_hole, stl_path)
-        print("Exportación completada con éxito")
         
         # Captura de pantalla
         screenshot_path = os.path.join(OUTPUT_DIR, "triangle.png")
