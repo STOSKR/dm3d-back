@@ -1,0 +1,16 @@
+fastapi>=0.95.0
+uvicorn>=0.21.0
+pydantic>=1.10.7
+cadquery>=2.1
+numpy-stl>=3.0.0
+numpy>=1.24.0
+python-multipart>=0.0.6
+matplotlib>=3.7.1
+vtk>=9.2.0
+nlopt==2.9.1
+solidpython2==2.1.1
+trimesh==3.23.5
+pyglet==2.0.9
+# Usa una versión disponible de cadquery-ocp
+casadi==3.6.3
+typish==1.9.3 

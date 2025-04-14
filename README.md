@@ -1,1 +1,81 @@
-# dm3d-back
+# API de Modelo 3D de Paraguas
+
+Esta API permite generar modelos 3D de paraguas basados en parámetros personalizables.
+
+## Requisitos
+
+### Instalación de dependencias básicas
+```
+pip install -r requirements.txt
+```
+
+### Instalación de CadQuery (necesario)
+CadQuery y sus dependencias son difíciles de instalar con pip. Se recomienda usar conda:
+
+```
+conda install -c conda-forge -c cadquery cadquery=2.3.0
+```
+
+Alternativamente, puedes usar un entorno Docker que ya tiene todas las dependencias instaladas.
+
+## Ejecución
+
+Para iniciar el servidor:
+
+```
+python main.py
+```
+
+O alternativamente:
+
+```
+uvicorn main:app --reload
+```
+
+La API estará disponible en `http://localhost:8000`.
+
+## Documentación
+
+La documentación interactiva está disponible en `http://localhost:8000/docs`.
+
+## Endpoints
+
+### Generar un modelo 3D
+
+**POST** `/generar-paraguas/`
+
+Cuerpo de la solicitud (JSON):
+
+```json
+{
+  "w_stick": 1.0,     // Ancho del palo del paraguas
+  "r_bottom": 5.0,    // Radio de la parte inferior redondeada
+  "h_stick": 20.0,    // Altura del palo
+  "r_cano": 15.0,     // Radio del dosel
+  "n_arcs": 8,        // Número de arcos
+  "h_tail": 5.0,      // Altura de la cola
+  "h_top": 3.0,       // Altura superior
+  "deep": 2.0         // Profundidad del molde
+}
+```
+
+Respuesta:
+
+```json
+{
+  "mensaje": "Modelo 3D generado con éxito",
+  "id_modelo": "identificador-único",
+  "url_descarga": "/descargar-modelo/identificador-único"
+}
+```
+
+### Descargar un modelo generado
+
+**GET** `/descargar-modelo/{id_modelo}`
+
+Retorna el archivo STL del modelo generado.
+
+## Notas
+
+- Los archivos generados se eliminan automáticamente después de 1 hora.
+- Los modelos se guardan en el directorio `modelos_generados`. 
