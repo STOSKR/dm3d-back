@@ -27,10 +27,12 @@ app = FastAPI(
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permite cualquier origen
+    allow_origins=["*", "https://dm3d.vercel.app", "http://localhost:3000", "http://localhost:5173"],  # Origen específico y comodines
     allow_credentials=True,
-    allow_methods=["*"],  # Permite todos los métodos
-    allow_headers=["*"],  # Permite todos los headers
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # Métodos específicos
+    allow_headers=["*", "Content-Type", "Authorization", "X-Requested-With"],  # Headers específicos
+    expose_headers=["*"],
+    max_age=600,  # Tiempo en segundos que el navegador puede cachear la respuesta al preflight request
 )
 
 # Directorio para almacenar archivos STL generados
