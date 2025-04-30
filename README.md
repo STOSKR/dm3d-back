@@ -1,6 +1,6 @@
 # API de Modelos 3D de Figuras
 
-Esta API permite generar modelos 3D de diferentes figuras (paraguas, círculos, triángulos y estrellas) basados en parámetros personalizables.
+Esta API permite generar modelos 3D de diferentes figuras (paraguas, círculos, triángulos y estrellas) basados en parámetros personalizables, así como crear moldes 3D a partir de imágenes.
 
 ## Requisitos
 
@@ -100,8 +100,21 @@ Cuerpo de la solicitud (JSON):
 }
 ```
 
-Respuesta para todos los endpoints:
+### Generar un modelo 3D a partir de una imagen
 
+**POST** `/generar-molde-imagen/`
+
+Cuerpo de la solicitud (multipart/form-data):
+
+- `file`: Archivo de imagen (jpg, png, avif, etc.)
+- `umbral_min`: (opcional) Umbral mínimo para detección de bordes (default: 50)
+- `umbral_max`: (opcional) Umbral máximo para detección de bordes (default: 150)
+- `porcentaje_contornos`: (opcional) Porcentaje de contornos a usar (default: 10.0)
+- `factor_simplificacion`: (opcional) Factor de simplificación del contorno (default: 1.0)
+- `altura_molde`: (opcional) Altura del molde en mm (default: 10.0)
+- `grosor_base`: (opcional) Grosor de la base en mm (default: 2.0)
+
+Respuesta:
 ```json
 {
   "mensaje": "Modelo 3D generado con éxito",

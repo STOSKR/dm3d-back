@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile
+from fastapi import FastAPI, HTTPException, BackgroundTasks, File, UploadFile, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -11,6 +11,12 @@ import uuid
 import math
 from typing import Optional
 from datetime import datetime
+import cv2
+import numpy as np
+from PIL import Image
+import io
+from scipy.spatial import Delaunay
+import json
 
 app = FastAPI(
     title="API de Modelos 3D de Figuras",
@@ -55,6 +61,14 @@ class ParametrosEstrella(BaseModel):
     r_star: float  # Radio exterior de la estrella
     r2_star: float  # Radio interior de la estrella
     deep: float  # Profundidad del molde
+
+class ParametrosImagen(BaseModel):
+    umbral_min: Optional[int] = 60
+    umbral_max: Optional[int] = 160
+    porcentaje_contornos: Optional[float] = 0.0
+    factor_simplificacion: Optional[float] = 1.0
+    altura_molde: Optional[float] = 3.0
+    grosor_base: Optional[float] = 1.0
 
 def solicitar_parametros():
     print("\n=== Ingrese los parámetros del paraguas ===")
@@ -447,6 +461,64 @@ async def generar_estrella(parametros: ParametrosEstrella, background_tasks: Bac
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al generar el modelo: {str(e)}")
 
+@app.post("/generar-molde-imagen/", summary="Genera un modelo 3D a partir de una imagen")
+async def generar_molde_imagen(
+    image: UploadFile = File(...),
+    parametros: Optional[str] = Form(None),
+    background_tasks: BackgroundTasks = None
+):
+    # Parsear los parámetros JSON si existen
+    params_obj = ParametrosImagen()
+    if parametros:
+        try:
+            params_dict = json.loads(parametros)
+            params_obj = ParametrosImagen(**params_dict)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Error al decodificar los parámetros JSON")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error en los parámetros: {str(e)}")
+    
+    try:
+        # Leer la imagen
+        contents = await image.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is None:
+            raise HTTPException(status_code=400, detail="No se pudo leer la imagen")
+        
+        # Procesar la imagen
+        img_blur = preprocesar_imagen(img)
+        bordes = detectar_bordes(img_blur, params_obj.umbral_min, params_obj.umbral_max)
+        contornos = encontrar_contornos(bordes)
+        
+        if not contornos:
+            raise HTTPException(status_code=400, detail="No se encontraron contornos en la imagen")
+        
+        # Seleccionar contornos según el porcentaje
+        cantidad_a_usar = max(1, int((params_obj.porcentaje_contornos / 100.0) * len(contornos)))
+        contornos_seleccionados = contornos[:cantidad_a_usar]
+        contorno_combinado = np.vstack(contornos_seleccionados)
+        
+        # Simplificar contorno
+        contorno_simplificado = simplificar_contorno(contorno_combinado, params_obj.factor_simplificacion)
+        
+        # Crear archivo STL
+        stl_path = os.path.join(OUTPUT_DIR, f"molde_{datetime.now().strftime('%d_%H%M%S')}.stl")
+        crear_molde_stl(contorno_simplificado, stl_path, params_obj.altura_molde, params_obj.grosor_base)
+        
+        # Configurar eliminación del archivo después de 1 hora
+        background_tasks.add_task(eliminar_archivo, stl_path, 3600)
+        
+        return FileResponse(
+            path=stl_path,
+            filename="molde.stl",
+            media_type="application/octet-stream"
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al procesar la imagen: {str(e)}")
+
 @app.get("/", summary="Ruta principal")
 async def raiz():
     return {
@@ -456,10 +528,115 @@ async def raiz():
             "/generar-paraguas/",
             "/generar-circulo/",
             "/generar-triangulo/",
-            "/generar-estrella/"
+            "/generar-estrella/",
+            "/generar-molde-imagen/"
         ],
         "documentación": "/docs"
     }
+
+def preprocesar_imagen(img):
+    # Convertir a escala de grises
+    img_gris = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Aplicar desenfoque gaussiano para reducir ruido
+    img_blur = cv2.GaussianBlur(img_gris, (5, 5), 0)
+    return img_blur
+
+def detectar_bordes(img_blur, umbral_min=50, umbral_max=150):
+    bordes = cv2.Canny(img_blur, umbral_min, umbral_max)
+    kernel = np.ones((3, 3), np.uint8)
+    bordes_dilatados = cv2.dilate(bordes, kernel, iterations=1)
+    return bordes_dilatados
+
+def encontrar_contornos(bordes):
+    contornos, _ = cv2.findContours(bordes, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contornos2 = sorted(contornos, key=cv2.contourArea, reverse=True)
+    return contornos2
+
+def simplificar_contorno(contorno, epsilon=1.0):
+    return cv2.approxPolyDP(contorno, epsilon, True)
+
+def crear_molde_stl(contorno, stl_path, altura_molde=10, grosor_base=2):
+    puntos = contorno.reshape(-1, 2).astype(float)
+    
+    # Calcular centro y centrar puntos
+    centro_x = np.mean(puntos[:, 0])
+    centro_y = np.mean(puntos[:, 1])
+    puntos[:, 0] -= centro_x
+    puntos[:, 1] -= centro_y
+    
+    # Escalar los puntos
+    factor_escala = 50.0 / max(np.max(puntos[:, 0]) - np.min(puntos[:, 0]),
+                              np.max(puntos[:, 1]) - np.min(puntos[:, 1]))
+    puntos *= factor_escala
+    
+    # Calcular dimensiones del molde
+    x_min, y_min = np.min(puntos, axis=0)
+    x_max, y_max = np.max(puntos, axis=0)
+    
+    # Añadir margen
+    margen = 5
+    x_min -= margen
+    y_min -= margen
+    x_max += margen
+    y_max += margen
+    
+    # Crear vértices para la base
+    vertices_base = [
+        [x_min, y_min, 0],
+        [x_max, y_min, 0],
+        [x_max, y_max, 0],
+        [x_min, y_max, 0],
+        [x_min, y_min, grosor_base],
+        [x_max, y_min, grosor_base],
+        [x_max, y_max, grosor_base],
+        [x_min, y_max, grosor_base],
+    ]
+    
+    # Crear la forma del cortador
+    num_puntos = len(puntos)
+    vertices_cortador_inferior = []
+    for x, y in puntos:
+        vertices_cortador_inferior.append([x, y, grosor_base])
+    vertices_cortador_inferior.append([0, 0, grosor_base])
+    
+    # Triangulación
+    puntos_con_centro = np.vstack([puntos, [0, 0]])
+    tri = Delaunay(puntos_con_centro[:, :2])
+    
+    caras_cortador_inferior = []
+    for simplex in tri.simplices:
+        caras_cortador_inferior.append([8 + simplex[2], 8 + simplex[1], 8 + simplex[0]])
+    
+    # Vértices laterales
+    vertices_cortador_lateral = []
+    for x, y in puntos:
+        vertices_cortador_lateral.append([x, y, grosor_base + altura_molde])
+    
+    # Caras laterales
+    caras_cortador_lateral = []
+    for i in range(num_puntos):
+        idx_inf_actual = 8 + i
+        idx_inf_siguiente = 8 + ((i + 1) % num_puntos)
+        idx_sup_actual = 8 + num_puntos + 1 + i
+        idx_sup_siguiente = 8 + num_puntos + 1 + ((i + 1) % num_puntos)
+        
+        caras_cortador_lateral.append([idx_inf_actual, idx_sup_actual, idx_sup_siguiente])
+        caras_cortador_lateral.append([idx_inf_actual, idx_sup_siguiente, idx_inf_siguiente])
+    
+    # Combinar vértices y caras
+    todos_vertices = vertices_base + vertices_cortador_inferior + vertices_cortador_lateral
+    todas_caras = caras_cortador_inferior + caras_cortador_lateral
+    
+    # Crear y guardar la malla
+    molde = mesh.Mesh(np.zeros(len(todas_caras), dtype=mesh.Mesh.dtype))
+    for i, (v1, v2, v3) in enumerate(todas_caras):
+        molde.vectors[i] = np.array([
+            todos_vertices[v1],
+            todos_vertices[v2],
+            todos_vertices[v3]
+        ])
+    
+    molde.save(stl_path)
 
 if __name__ == "__main__":
     import uvicorn
@@ -478,6 +655,7 @@ if __name__ == "__main__":
     print(f"POST http://localhost:{puerto}/generar-circulo/")
     print(f"POST http://localhost:{puerto}/generar-triangulo/")
     print(f"POST http://localhost:{puerto}/generar-estrella/")
+    print(f"POST http://localhost:{puerto}/generar-molde-imagen/")
     print(f"GET http://localhost:{puerto}/docs para ver la documentación completa")
     
     try:
