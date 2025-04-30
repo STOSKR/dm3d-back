@@ -1,6 +1,6 @@
-# API de Modelo 3D de Paraguas
+# API de Modelos 3D de Figuras
 
-Esta API permite generar modelos 3D de paraguas basados en parámetros personalizables.
+Esta API permite generar modelos 3D de diferentes figuras (paraguas, círculos, triángulos y estrellas) basados en parámetros personalizables.
 
 ## Requisitos
 
@@ -32,15 +32,15 @@ O alternativamente:
 uvicorn main:app --reload
 ```
 
-La API estará disponible en `http://localhost:8000`.
+La API estará disponible en `http://localhost:8080`.
 
 ## Documentación
 
-La documentación interactiva está disponible en `http://localhost:8000/docs`.
+La documentación interactiva está disponible en `http://localhost:8080/docs`.
 
 ## Endpoints
 
-### Generar un modelo 3D
+### Generar un modelo 3D de Paraguas
 
 **POST** `/generar-paraguas/`
 
@@ -59,7 +59,48 @@ Cuerpo de la solicitud (JSON):
 }
 ```
 
-Respuesta:
+### Generar un modelo 3D de Círculo
+
+**POST** `/generar-circulo/`
+
+Cuerpo de la solicitud (JSON):
+
+```json
+{
+  "r_circle": 10.0,   // Radio del círculo
+  "deep": 2.0         // Profundidad del molde
+}
+```
+
+### Generar un modelo 3D de Triángulo
+
+**POST** `/generar-triangulo/`
+
+Cuerpo de la solicitud (JSON):
+
+```json
+{
+  "side_length": 20.0, // Longitud del lado del triángulo
+  "deep": 2.0          // Profundidad del molde
+}
+```
+
+### Generar un modelo 3D de Estrella
+
+**POST** `/generar-estrella/`
+
+Cuerpo de la solicitud (JSON):
+
+```json
+{
+  "n_tips": 5,        // Número de puntas de la estrella
+  "r_star": 15.0,     // Radio exterior de la estrella
+  "r2_star": 7.0,     // Radio interior de la estrella
+  "deep": 2.0         // Profundidad del molde
+}
+```
+
+Respuesta para todos los endpoints:
 
 ```json
 {
